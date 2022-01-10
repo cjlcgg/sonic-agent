@@ -5,6 +5,7 @@ import com.sonic.agent.interfaces.PlatformType;
 import com.sonic.agent.maps.IOSDeviceManagerMap;
 import com.sonic.agent.maps.IOSProcessMap;
 import com.sonic.agent.maps.IOSSizeMap;
+import com.sonic.agent.netty.NettyClientHandler;
 import com.sonic.agent.netty.NettyThreadPool;
 import com.sonic.agent.tools.PortTool;
 import com.sonic.agent.tools.ProcessCommandTool;
@@ -42,17 +43,16 @@ public class TIDeviceTool implements ApplicationListener<ContextRefreshedEvent> 
     @Override
     public void onApplicationEvent(@NonNull ContextRefreshedEvent event) {
         logger.info("开启iOS相关功能");
-        init();
     }
 
 
-    public static void init() {
+    public void init() {
         IOSDeviceThreadPool.cachedThreadPool.execute(() -> {
             List<String> aDevice = ProcessCommandTool.getProcessLocalCommand("tidevice list");
             for (String udId : aDevice) {
                 sendOnlineStatus(udId.substring(0, udId.indexOf(" ")));
             }
-            while (true) {
+            while (NettyClientHandler.serverOnline) {
                 try {
                     Thread.sleep(3000);
                 } catch (InterruptedException e) {
@@ -170,19 +170,20 @@ public class TIDeviceTool implements ApplicationListener<ContextRefreshedEvent> 
             } else if (system.contains("linux") || system.contains("mac")) {
                 wdaProcess = Runtime.getRuntime().exec(new String[]{"sh", "-c", commandLine});
             }
-            BufferedReader stdInput = new BufferedReader(new
-                    InputStreamReader(wdaProcess.getInputStream()));
-            String s;
-            while (wdaProcess.isAlive()) {
-                if ((s = stdInput.readLine()) != null) {
-                    if (s.contains("WebDriverAgent start successfully")) {
-                        break;
-                    }
-                } else {
-                    Thread.sleep(500);
-                }
-                logger.info(s);
-            }
+//            BufferedReader stdInput = new BufferedReader(new
+//                    InputStreamReader(wdaProcess.getInputStream()));
+//            String s;
+//            while (wdaProcess.isAlive()) {
+//                if ((s = stdInput.readLine()) != null) {
+//                    if (s.contains("WebDriverAgent start successfully")) {
+//                        break;
+//                    }
+//                } else {
+//                    Thread.sleep(500);
+//                }
+//                logger.info(s);
+//            }
+            Thread.sleep(4000);
             processList = new ArrayList<>();
             processList.add(wdaProcess);
             IOSProcessMap.getMap().put(udId, processList);
