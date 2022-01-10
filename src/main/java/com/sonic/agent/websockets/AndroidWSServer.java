@@ -15,10 +15,7 @@ import com.sonic.agent.bridge.android.AndroidDeviceThreadPool;
 import com.sonic.agent.interfaces.DeviceStatus;
 import com.sonic.agent.maps.*;
 import com.sonic.agent.netty.NettyThreadPool;
-import com.sonic.agent.tools.MiniCapTool;
-import com.sonic.agent.tools.PortTool;
-import com.sonic.agent.tools.ProcessCommandTool;
-import com.sonic.agent.tools.UploadTools;
+import com.sonic.agent.tools.*;
 import org.openqa.selenium.OutputType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -147,9 +144,20 @@ public class AndroidWSServer {
                                         Integer.parseInt(res), session
                                 );
                                 MiniCapMap.getMap().put(session, miniCapThread);
+
+                                //scrcpy服务
+                                /*ScrcpyServerTool scrcpyServerTool = new ScrcpyServerTool();
+                                AtomicReference<String[]> deviceInfo = new AtomicReference<>(new String[24]);
+                                Thread scrcpyThread = scrcpyServerTool.start(
+                                        udIdMap.get(session).getSerialNumber(), deviceInfo, null,
+                                        picMap.get(session) == null ? "high" : picMap.get(session),
+                                        Integer.parseInt(res), session
+                                );
+                                ScrcpyMap.getMap().put(session, scrcpyThread);
+
                                 JSONObject picFinish = new JSONObject();
                                 picFinish.put("msg", "picFinish");
-                                sendText(session, picFinish.toJSONString());
+                                sendText(session, picFinish.toJSONString());*/
                             }
 
                             @Override
@@ -425,7 +433,7 @@ public class AndroidWSServer {
                         + " shell app_process -Djava.class.path=/data/local/tmp/yadb /data/local/tmp com.ysbing.yadb.Main -keyboard " + msg.getString("detail"));
                 break;
             case "pic": {
-                Thread old = MiniCapMap.getMap().get(session);
+               /* Thread old = MiniCapMap.getMap().get(session);
                 old.interrupt();
                 do {
                     try {
@@ -444,7 +452,7 @@ public class AndroidWSServer {
                 MiniCapMap.getMap().put(session, miniCapThread);
                 JSONObject picFinish = new JSONObject();
                 picFinish.put("msg", "picFinish");
-                sendText(session, picFinish.toJSONString());
+                sendText(session, picFinish.toJSONString());*/
                 break;
             }
             case "touch":
@@ -597,6 +605,7 @@ public class AndroidWSServer {
         }
         rotationMap.remove(session);
         MiniCapMap.getMap().get(session).interrupt();
+//        ScrcpyMap.getMap().get(session).interrupt();
         WebSocketSessionMap.removeSession(session);
         try {
             session.close();

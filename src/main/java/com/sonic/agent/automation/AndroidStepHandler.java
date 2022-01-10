@@ -11,11 +11,8 @@ import com.sonic.agent.interfaces.ErrorType;
 import com.sonic.agent.interfaces.ResultDetailStatus;
 import com.sonic.agent.interfaces.StepType;
 import com.sonic.agent.maps.AndroidPasswordMap;
-import com.sonic.agent.tools.DownImageTool;
-import com.sonic.agent.tools.LogTool;
+import com.sonic.agent.tools.*;
 import com.sonic.agent.interfaces.PlatformType;
-import com.sonic.agent.tools.PortTool;
-import com.sonic.agent.tools.UploadTools;
 import io.appium.java_client.*;
 import io.appium.java_client.android.AndroidDriver;
 import io.appium.java_client.android.AndroidStartScreenRecordingOptions;
@@ -29,6 +26,7 @@ import io.appium.java_client.remote.AutomationName;
 import io.appium.java_client.remote.MobileCapabilityType;
 import io.appium.java_client.touch.WaitOptions;
 import io.appium.java_client.touch.offset.PointOption;
+import org.apache.tomcat.util.http.fileupload.FileUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Attribute;
 import org.jsoup.nodes.Document;
@@ -37,12 +35,17 @@ import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.remote.DesiredCapabilities;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.util.Base64Utils;
 import org.springframework.util.FileCopyUtils;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestTemplate;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import javax.imageio.stream.FileImageInputStream;
+import java.io.*;
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.Future;
@@ -69,7 +72,6 @@ public class AndroidStepHandler {
     private String udId = "";
     //测试状态
     private int status = 1;
-
     public void setTestMode(int caseId, int resultId, String udId, String type, String sessionId) {
         log.caseId = caseId;
         log.resultId = resultId;
@@ -104,7 +106,9 @@ public class AndroidStepHandler {
         DesiredCapabilities desiredCapabilities = new DesiredCapabilities();
         //微信webView配置
         ChromeOptions chromeOptions = new ChromeOptions();
-        chromeOptions.setExperimentalOption("androidProcess", "com.tencent.mm:tools");
+//        chromeOptions.setExperimentalOption("androidProcess", "com.tencent.mm:tools");
+        chromeOptions.setExperimentalOption("androidProcess", "com.mirum.fx")
+                .setExperimentalOption("androidPackage", "com.mirum.fx");
         desiredCapabilities.setCapability(ChromeOptions.CAPABILITY, chromeOptions);
         //webView通用配置，自动下载匹配的driver
         desiredCapabilities.setCapability(AndroidMobileCapabilityType.RECREATE_CHROME_DRIVER_SESSIONS, true);
@@ -1437,6 +1441,9 @@ public class AndroidStepHandler {
         JSONArray eleList = step.getJSONArray("elements");
         HandleDes handleDes = new HandleDes();
         switch (step.getString("stepType")) {
+            case "clickByText":
+                clickByText(handleDes, step.getString("content"));
+                break;
             case "toWebView":
                 toWebView(handleDes, step.getString("content"));
                 break;
@@ -1583,5 +1590,58 @@ public class AndroidStepHandler {
         } else {
             log.sendStepLog(StepType.PASS, step, detail);
         }
+    }
+
+    /**
+     * 根据文字识别定位当前图片的位置，并点击
+     * @author caojiangling
+     * @param handleDes
+     * @param text
+     */
+    public void clickByText(HandleDes handleDes, String text){
+        handleDes.setStepDes("识别定位文本：" + text);
+        File imageFile = null;
+        FileInputStream fileInputStream = null;
+        byte[] imageByte = null;
+        try {
+            imageFile  = getScreenToLocal();
+            fileInputStream = new FileInputStream(imageFile);
+            imageByte = new byte[fileInputStream.available()];
+            int read = fileInputStream.read(imageByte);
+            // 对字节数组进行Base64编码，得到Base64编码的字符串
+            String imageBase64 = Base64Utils.encodeToString(imageByte);
+            // 请求OCR服务识别
+            JSONObject param = new JSONObject();
+            param.put("imageBase64", imageBase64);
+            param.put("text", text);
+            RestTemplate restTemplate = SpringTool.getBean(RestTemplate.class);
+            ResponseEntity<JSONObject> responseEntity = restTemplate.postForEntity("http://127.0.0.1:38080/ocr/image/coordinates", param, JSONObject.class);
+            if (Objects.requireNonNull(responseEntity.getBody()).getInteger("code") == 0){
+                Integer x = responseEntity.getBody().getJSONObject("data").getInteger("x");
+                Integer y = responseEntity.getBody().getJSONObject("data").getInteger("y");
+                log.sendStepLog(StepType.INFO, "文本："+text+"坐标，x为:"+x+",坐标y为:"+y,"");
+                // 点击坐标
+                String command = "input tap "+ x + " " + y;
+                IDevice iDevice = AndroidDeviceBridgeTool.getIDeviceByUdId(udId);
+                AndroidDeviceBridgeTool.executeCommand(iDevice,command);
+            }else {
+                log.sendStepLog(StepType.ERROR, "文本:"+text+",定位失败！","");
+            }
+        } catch (Exception e) {
+            log.sendStepLog(StepType.ERROR, "识别定位文本{" + text + "}异常:", e.getMessage());
+            handleDes.setE(e);
+        }finally {
+            if (Objects.nonNull(fileInputStream)){
+                try {
+                    fileInputStream.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (Objects.nonNull(imageFile) && imageFile.exists()){
+                boolean delete = imageFile.delete();
+            }
+        }
+
     }
 }

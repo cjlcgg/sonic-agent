@@ -1,10 +1,10 @@
 sonic:
   agent:
-    host: 192.168.1.10
+    host: 10.58.10.112
     port: 7777
-    key: 29002272-4659-4808-a804-08ce3388b136
+    key: 2f489c4c-a3f3-4721-bcfe-77f4a8a40fe9
   server:
-    host: 192.168.1.10
+    host: 10.179.2.21
     folder-port: 8094
     transport-port: 8095
 
@@ -14,7 +14,7 @@ modules:
     use-adbkit: true
   ios:
     enable: false
-    wda-bundle-id: com.sonic.wda.xctrunner
+    wda-bundle-id: com.fosun.WebDriverAgentRunner.xctrunner
   appium:
     enable: true
   webview:

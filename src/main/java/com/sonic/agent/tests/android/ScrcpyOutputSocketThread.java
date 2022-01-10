@@ -1,5 +1,7 @@
 package com.sonic.agent.tests.android;
 
+import com.alibaba.fastjson.JSONObject;
+import com.sonic.agent.tools.H264SPSPaser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,45 +59,41 @@ public class ScrcpyOutputSocketThread extends Thread {
     public void run() {
         boolean sendFlag = false;
         byte[] body = new byte[0];
+
         while (scrcpyInputSocketThread.isAlive()) {
             Queue<byte[]> dataQueue = scrcpyInputSocketThread.getDataQueue();
+
             while (!dataQueue.isEmpty()){
                 byte[] buffer = dataQueue.poll();
-//                log.info("长度=================>{}",buffer.length);
+
                 for (int cursor = 0 ; cursor < buffer.length - 5;){
-                    boolean first = (buffer[cursor] & 0xff) == 0;
-                    boolean second = (buffer[cursor + 1] & 0xff) == 0;
-                    boolean third = (buffer[cursor + 2] & 0xff) == 0;
-                    boolean fourth =  (buffer[cursor + 3] & 0xff) == 1;
-                    boolean fifth =  (buffer[cursor + 4] & 0xff) == 65;
-                    if (first && second){ // 先判断是否结束
+                    boolean startFlag = (buffer[cursor] & 0xff) == 0 && (buffer[cursor + 1] & 0xff) == 0
+                            && (buffer[cursor + 2] & 0xff) == 0 && (buffer[cursor + 3] & 0xff) == 1
+                            && (buffer[cursor + 4] & 0xff) != 104;
+                    if (!sendFlag && startFlag){ // 先判断是否结束
                         if (body.length > 1){
-//                            log.info("执行直接发送body，并重置内容");
                             body = addBytes(body, subByteArray(buffer, 0, cursor));
-                            sendByte(session, body);
+                            sendMessage(body);
                             body = new byte[0];
                         }
                     }
-                    if (first && second && third && fourth && fifth){ // 找到开始
+                    if (startFlag){ // 找到开始
                         sendFlag = false;
                         int start = cursor;
-//                        log.info("起始坐标=================>{}", start);
                         for ( cursor += 4; cursor < buffer.length - 5; cursor ++){
-                            first = (buffer[cursor] & 0xff) == 0;
-                            second = (buffer[cursor + 1] & 0xff) == 0;
-                            if (first && second ) {  // 找到结束
-//                                log.info("结束坐标=================>{}", cursor);
+                            boolean endFlag = (buffer[cursor] & 0xff) == 0 && (buffer[cursor + 1] & 0xff) == 0
+                                    && (buffer[cursor + 2] & 0xff) == 0 && (buffer[cursor + 3] & 0xff) == 1
+                                    && (buffer[cursor + 4] & 0xff) != 104;
+                            if (endFlag) {  // 找到结束
                                 body = subByteArray(buffer,start, cursor);
-//                                log.info("同一个数组中I帧，执行直接发送截取内容，跳出循环，开始起始位置查找");
-                                sendByte(session, body);
+                                sendMessage(body);
                                 body = new byte[0];
                                 sendFlag = true;
                                 break;
                             }
                         }
                         if (sendFlag) continue;
-//                        log.info("本次队列，未找到结束点，先拷贝");
-                        body = addBytes(body, subByteArray(buffer, start, cursor));
+                        body = addBytes(body, subByteArray(buffer, start, buffer.length));
                         continue;
                     }
                     cursor ++;
@@ -103,4 +101,36 @@ public class ScrcpyOutputSocketThread extends Thread {
             }
         }
     }
+
+    public void sendMessage(byte[] body){
+        if (body.length < 5) return;
+        if ((body[4] & 0xff) == 103){ // 根据SPS帧解析分辨率
+            H264SPSPaser h264SPSPaser = new H264SPSPaser();
+            h264SPSPaser.parse(subByteArray(body,4,body.length));
+            JSONObject size = new JSONObject();
+            size.put("size", "msg");
+            size.put("height", h264SPSPaser.getHeight());
+            size.put("width", h264SPSPaser.getWidth());
+            sendText(session, size.toJSONString());
+        }
+        sendByte(session, filterEndSpace(body));
+    }
+
+    public byte[] filterEndSpace(byte[] body){ // 过滤末尾的0位
+        if (body.length < 1) return body;
+        int length = body.length;
+        for (int cursor = body.length-1; cursor < body.length; cursor --){
+            if ((body[cursor] & 0xff) == 0) {
+                length--;
+                continue;
+            }
+            break;
+        }
+        if (length != body.length){
+            body = subByteArray(body,0,length);
+        }
+        return body;
+    }
+
+
 }
