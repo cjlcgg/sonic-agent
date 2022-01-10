@@ -28,6 +28,7 @@ import org.springframework.web.client.RestTemplate;
 import javax.websocket.*;
 import javax.websocket.server.PathParam;
 import javax.websocket.server.ServerEndpoint;
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.Socket;
@@ -312,7 +313,7 @@ public class AndroidWSServer {
                 result.put("detail", "初始化Driver失败！部分功能不可用！请联系管理员");
             } finally {
                 try {
-                    Thread.sleep(2000);
+                    Thread.sleep(1000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -484,6 +485,33 @@ public class AndroidWSServer {
                 } else {
                     AndroidStepHandler androidStepHandler = HandlerMap.getAndroidMap().get(session.getId());
                     if (androidStepHandler == null || androidStepHandler.getAndroidDriver() == null) {
+                        if (msg.getString("detail").equals("openDriver")) {
+                            androidStepHandler = new AndroidStepHandler();
+                            androidStepHandler.setTestMode(0, 0, udIdMap.get(session).getSerialNumber(), DeviceStatus.DEBUGGING, session.getId());
+                            JSONObject result = new JSONObject();
+                            AndroidStepHandler finalAndroidStepHandler1 = androidStepHandler;
+                            AndroidDeviceThreadPool.cachedThreadPool.execute(() -> {
+                                try {
+                                    AndroidDeviceLocalStatus.startDebug(udIdMap.get(session).getSerialNumber());
+                                    finalAndroidStepHandler1.startAndroidDriver(udIdMap.get(session).getSerialNumber());
+                                    result.put("status", "success");
+                                    result.put("detail", "初始化Driver完成！");
+                                    HandlerMap.getAndroidMap().put(session.getId(), finalAndroidStepHandler1);
+                                } catch (Exception e) {
+                                    logger.error(e.getMessage());
+                                    result.put("status", "error");
+                                    result.put("detail", "初始化Driver失败！部分功能不可用！请联系管理员");
+                                } finally {
+                                    try {
+                                        Thread.sleep(1000);
+                                    } catch (InterruptedException e) {
+                                        e.printStackTrace();
+                                    }
+                                    result.put("msg", "openDriver");
+                                    sendText(session, result.toJSONString());
+                                }
+                            });
+                        }
                         break;
                     }
                     try {
@@ -512,17 +540,16 @@ public class AndroidWSServer {
                         e.printStackTrace();
                     }
                     if (msg.getString("detail").equals("install")) {
-                        AndroidStepHandler finalAndroidStepHandler = androidStepHandler;
                         AndroidDeviceThreadPool.cachedThreadPool.execute(() -> {
                             JSONObject result = new JSONObject();
                             result.put("msg", "installFinish");
-                            HandleDes handleDes = new HandleDes();
-                            finalAndroidStepHandler.install(handleDes, msg.getString("apk"));
-                            if (handleDes.getE() == null) {
+                            try {
+                                File localFile = DownImageTool.download(msg.getString("apk"));
+                                udIdMap.get(session).installPackage(localFile.getAbsolutePath(), true, "-t");
                                 result.put("status", "success");
-                            } else {
-                                System.out.println(handleDes.getE());
+                            } catch (IOException | InstallException e) {
                                 result.put("status", "fail");
+                                e.printStackTrace();
                             }
                             sendText(session, result.toJSONString());
                         });
