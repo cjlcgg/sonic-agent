@@ -1586,13 +1586,14 @@ public class AndroidStepHandler {
             // 请求OCR服务识别
             JSONObject param = new JSONObject();
             param.put("imageBase64", imageBase64);
+            param.put("imageType", "jpg");
             param.put("text", text);
             RestTemplate restTemplate = SpringTool.getBean(RestTemplate.class);
-            ResponseEntity<JSONObject> responseEntity = restTemplate.postForEntity("http://127.0.0.1:38080/ocr/image/coordinates", param, JSONObject.class);
+            ResponseEntity<JSONObject> responseEntity = restTemplate.postForEntity("http://autotesting.folidaymall.com/ocr/image/coordinates", param, JSONObject.class);
             if (Objects.requireNonNull(responseEntity.getBody()).getInteger("code") == 0){
                 Integer x = responseEntity.getBody().getJSONObject("data").getInteger("x");
                 Integer y = responseEntity.getBody().getJSONObject("data").getInteger("y");
-                log.sendStepLog(StepType.INFO, "文本："+text+"坐标，x为:"+x+",坐标y为:"+y,"");
+                log.sendStepLog(StepType.INFO, "文本："+text+"。坐标，x为:"+x+",坐标y为:"+y,"");
                 // 点击坐标
                 String command = "input tap "+ x + " " + y;
                 IDevice iDevice = AndroidDeviceBridgeTool.getIDeviceByUdId(udId);
