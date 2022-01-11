@@ -154,11 +154,11 @@ public class AndroidWSServer {
                                         picMap.get(session) == null ? "high" : picMap.get(session),
                                         Integer.parseInt(res), session
                                 );
-                                ScrcpyMap.getMap().put(session, scrcpyThread);
+                                ScrcpyMap.getMap().put(session, scrcpyThread);*/
 
                                 JSONObject picFinish = new JSONObject();
                                 picFinish.put("msg", "picFinish");
-                                sendText(session, picFinish.toJSONString());*/
+                                sendText(session, picFinish.toJSONString());
                             }
 
                             @Override
@@ -434,7 +434,7 @@ public class AndroidWSServer {
                         + " shell app_process -Djava.class.path=/data/local/tmp/yadb /data/local/tmp com.ysbing.yadb.Main -keyboard " + msg.getString("detail"));
                 break;
             case "pic": {
-               /* Thread old = MiniCapMap.getMap().get(session);
+                Thread old = MiniCapMap.getMap().get(session);
                 old.interrupt();
                 do {
                     try {
@@ -453,7 +453,7 @@ public class AndroidWSServer {
                 MiniCapMap.getMap().put(session, miniCapThread);
                 JSONObject picFinish = new JSONObject();
                 picFinish.put("msg", "picFinish");
-                sendText(session, picFinish.toJSONString());*/
+                sendText(session, picFinish.toJSONString());
                 break;
             }
             case "touch":
