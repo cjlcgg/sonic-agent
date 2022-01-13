@@ -1593,7 +1593,8 @@ public class AndroidStepHandler {
             if (Objects.requireNonNull(responseEntity.getBody()).getInteger("code") == 0){
                 Integer x = responseEntity.getBody().getJSONObject("data").getInteger("x");
                 Integer y = responseEntity.getBody().getJSONObject("data").getInteger("y");
-                log.sendStepLog(StepType.INFO, "文本："+text+"。坐标，x为:"+x+",坐标y为:"+y,"");
+                String matchText = responseEntity.getBody().getJSONObject("data").getString("match_text");
+                log.sendStepLog(StepType.INFO, "识别定位文本{"+text+"}，匹配的文本为:" + matchText +", 坐标x为:"+x+", 坐标y为:"+y,"");
                 // 点击坐标
                 String command = "input tap "+ x + " " + y;
                 IDevice iDevice = AndroidDeviceBridgeTool.getIDeviceByUdId(udId);

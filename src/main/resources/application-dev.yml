@@ -1,6 +1,6 @@
 sonic:
   agent:
-    host: 10.58.10.112
+    host: 10.58.15.155
     port: 7777
     key: 2f489c4c-a3f3-4721-bcfe-77f4a8a40fe9
   server:

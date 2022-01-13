@@ -126,6 +126,7 @@ public class AndroidWSServer {
                                 rotationJson.put("value", Integer.parseInt(res) * 90);
                                 sendText(session, rotationJson.toJSONString());
                                 Thread old = MiniCapMap.getMap().get(session);
+                                /*Thread old = ScrcpyMap.getMap().get(session);*/
                                 if (old != null) {
                                     old.interrupt();
                                     do {
@@ -136,6 +137,7 @@ public class AndroidWSServer {
                                         }
                                     }
                                     while (MiniCapMap.getMap().get(session) != null);
+                                    /*while (ScrcpyMap.getMap().get(session) != null);*/
                                 }
                                 MiniCapTool miniCapTool = new MiniCapTool();
                                 AtomicReference<String[]> banner = new AtomicReference<>(new String[24]);
