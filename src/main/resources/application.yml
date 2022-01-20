@@ -2,3 +2,4 @@ spring:
   version: @project.version@
   profiles:
     active: prod
+
