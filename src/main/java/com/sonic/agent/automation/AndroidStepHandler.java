@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.android.ddmlib.IDevice;
+import com.android.ddmlib.RawImage;
 import com.sonic.agent.bridge.android.AndroidDeviceBridgeTool;
 import com.sonic.agent.bridge.android.AndroidDeviceThreadPool;
 import com.sonic.agent.interfaces.ErrorType;
@@ -48,6 +49,7 @@ import org.springframework.web.client.RestTemplate;
 import javax.imageio.stream.FileImageInputStream;
 import java.io.*;
 import java.math.BigDecimal;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.Future;
@@ -1576,12 +1578,20 @@ public class AndroidStepHandler {
         File imageFile = null;
         FileInputStream fileInputStream = null;
         byte[] imageByte = null;
+        IDevice iDevice = AndroidDeviceBridgeTool.getIDeviceByUdId(udId);
+        String tempImageName = log.udId + Calendar.getInstance().getTimeInMillis() + ".jpg";
+        String remoteTempImagePath = "/data/local/tmp/" + tempImageName;
+        String localTempImagePath = Paths.get(System.getProperty("user.dir"),"test-output", tempImageName).toString();
         try {
-            imageFile  = getScreenToLocal();
+            // 屏幕截屏，注意：使用手机全屏截屏
+            String command = "screencap -p " + remoteTempImagePath;
+            AndroidDeviceBridgeTool.executeCommand(iDevice, command);
+            iDevice.pullFile(remoteTempImagePath, localTempImagePath);
+            // 图片转BASE64
+            imageFile = new File(localTempImagePath);
             fileInputStream = new FileInputStream(imageFile);
             imageByte = new byte[fileInputStream.available()];
             int read = fileInputStream.read(imageByte);
-            // 对字节数组进行Base64编码，得到Base64编码的字符串
             String imageBase64 = Base64Utils.encodeToString(imageByte);
             // 请求OCR服务识别
             JSONObject param = new JSONObject();
@@ -1596,9 +1606,7 @@ public class AndroidStepHandler {
                 String matchText = responseEntity.getBody().getJSONObject("data").getString("match_text");
                 log.sendStepLog(StepType.INFO, "识别定位文本{"+text+"}，匹配的文本为:" + matchText +", 坐标x为:"+x+", 坐标y为:"+y,"");
                 // 点击坐标
-                String command = "input tap "+ x + " " + y;
-                IDevice iDevice = AndroidDeviceBridgeTool.getIDeviceByUdId(udId);
-                AndroidDeviceBridgeTool.executeCommand(iDevice,command);
+                AndroidDeviceBridgeTool.executeCommand(iDevice,"input tap "+ x + " " + y);
             }else {
                 log.sendStepLog(StepType.ERROR, "文本:"+text+",定位失败！","");
             }
