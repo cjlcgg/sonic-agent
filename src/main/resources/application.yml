@@ -1,5 +1,4 @@
 spring:
   version: @project.version@
   profiles:
-    active: prod
-
+    active: dev,@profileActive@
