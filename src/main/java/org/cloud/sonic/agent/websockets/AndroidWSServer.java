@@ -126,7 +126,7 @@ public class AndroidWSServer {
                                 rotationJson.put("value", Integer.parseInt(res) * 90);
                                 AgentTool.sendText(session, rotationJson.toJSONString());
                                 Thread old = MiniCapMap.getMap().get(session);
-                                /*while (ScrcpyMap.getMap().get(session) != null);*/
+                                /*Thread old = ScrcpyMap.getMap().get(session);*/
                                 if (old != null) {
                                     old.interrupt();
                                     do {

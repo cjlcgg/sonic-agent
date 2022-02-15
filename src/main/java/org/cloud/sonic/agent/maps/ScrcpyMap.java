@@ -1,4 +1,4 @@
-package com.sonic.agent.maps;
+package org.cloud.sonic.agent.maps;
 
 import javax.websocket.Session;
 import java.util.Map;
