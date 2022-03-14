@@ -5,13 +5,13 @@ import com.alibaba.fastjson.JSONObject;
 import com.android.ddmlib.IDevice;
 import org.cloud.sonic.agent.bridge.android.AndroidDeviceBridgeTool;
 import org.cloud.sonic.agent.bridge.android.AndroidDeviceThreadPool;
-import org.cloud.sonic.agent.cv.AKAZEFinder;
-import org.cloud.sonic.agent.cv.SIFTFinder;
-import org.cloud.sonic.agent.cv.SimilarityChecker;
-import org.cloud.sonic.agent.cv.TemMatcher;
-import org.cloud.sonic.agent.interfaces.ErrorType;
-import org.cloud.sonic.agent.interfaces.ResultDetailStatus;
-import org.cloud.sonic.agent.interfaces.StepType;
+import org.cloud.sonic.agent.tools.cv.AKAZEFinder;
+import org.cloud.sonic.agent.tools.cv.SIFTFinder;
+import org.cloud.sonic.agent.tools.cv.SimilarityChecker;
+import org.cloud.sonic.agent.tools.cv.TemMatcher;
+import org.cloud.sonic.agent.common.interfaces.ErrorType;
+import org.cloud.sonic.agent.common.interfaces.ResultDetailStatus;
+import org.cloud.sonic.agent.common.interfaces.StepType;
 import org.cloud.sonic.agent.tools.*;
 import io.appium.java_client.*;
 import io.appium.java_client.android.AndroidDriver;
@@ -25,15 +25,12 @@ import io.appium.java_client.remote.AutomationName;
 import io.appium.java_client.remote.MobileCapabilityType;
 import io.appium.java_client.touch.WaitOptions;
 import io.appium.java_client.touch.offset.PointOption;
-import org.cloud.sonic.agent.tools.*;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Attribute;
 import org.jsoup.nodes.Document;
 import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.remote.DesiredCapabilities;
-import org.springframework.core.env.Environment;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.*;
 import org.springframework.web.client.RestTemplate;
@@ -67,7 +64,7 @@ public class AndroidStepHandler {
     private String testPackage = "";
     private String udId = "";
     //测试状态
-    private int status = 1;
+    private int status = ResultDetailStatus.PASS;
 
     public void setTestMode(int caseId, int resultId, String udId, String type, String sessionId) {
         log.caseId = caseId;
@@ -103,7 +100,7 @@ public class AndroidStepHandler {
         DesiredCapabilities desiredCapabilities = new DesiredCapabilities();
         //微信webView配置
         ChromeOptions chromeOptions = new ChromeOptions();
-//        chromeOptions.setExperimentalOption("androidProcess", "com.tencent.mm:tools");
+//      chromeOptions.setExperimentalOption("androidProcess", "com.tencent.mm:tools");
         chromeOptions.setExperimentalOption("androidProcess", "com.mirum.fx")
                 .setExperimentalOption("androidPackage", "com.mirum.fx");
         desiredCapabilities.setCapability(ChromeOptions.CAPABILITY, chromeOptions);
@@ -165,14 +162,6 @@ public class AndroidStepHandler {
     public void closeAndroidDriver() {
         try {
             if (androidDriver != null) {
-                //终止测试包
-                if (!testPackage.equals("")) {
-                    try {
-                        androidDriver.terminateApp(testPackage, new AndroidTerminateApplicationOptions().withTimeout(Duration.ofMillis(1000)));
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
                 androidDriver.quit();
                 log.sendStepLog(StepType.PASS, "退出连接设备", "");
             }
@@ -537,7 +526,7 @@ public class AndroidStepHandler {
         try {
             androidDriver.installApp(path, new AndroidInstallApplicationOptions()
                     .withAllowTestPackagesEnabled().withReplaceEnabled()
-                    .withGrantPermissionsEnabled().withTimeout(Duration.ofMillis(60000)));
+                    .withGrantPermissionsEnabled().withTimeout(Duration.ofMillis(600000)));
         } catch (Exception e) {
             handleDes.setE(e);
             return;
@@ -826,12 +815,29 @@ public class AndroidStepHandler {
         }
     }
 
-    public void swipe(HandleDes handleDes, String des1, String xy1, String des2, String xy2) {
+    public void swipePoint(HandleDes handleDes, String des1, String xy1, String des2, String xy2) {
         int x1 = Integer.parseInt(xy1.substring(0, xy1.indexOf(",")));
         int y1 = Integer.parseInt(xy1.substring(xy1.indexOf(",") + 1));
         int x2 = Integer.parseInt(xy2.substring(0, xy2.indexOf(",")));
         int y2 = Integer.parseInt(xy2.substring(xy2.indexOf(",") + 1));
         handleDes.setStepDes("滑动拖拽" + des1 + "到" + des2);
+        handleDes.setDetail("拖动坐标(" + x1 + "," + y1 + ")到(" + x2 + "," + y2 + ")");
+        try {
+            TouchAction ta = new TouchAction(androidDriver);
+            ta.press(PointOption.point(x1, y1)).waitAction(WaitOptions.waitOptions(Duration.ofMillis(300))).moveTo(PointOption.point(x2, y2)).release().perform();
+        } catch (Exception e) {
+            handleDes.setE(e);
+        }
+    }
+
+    public void swipe(HandleDes handleDes, String des, String selector, String pathValue, String des2, String selector2, String pathValue2) {
+        WebElement webElement = findEle(selector, pathValue);
+        WebElement webElement2 = findEle(selector2, pathValue2);
+        int x1 = webElement.getLocation().getX();
+        int y1 = webElement.getLocation().getY();
+        int x2 = webElement2.getLocation().getX();
+        int y2 = webElement2.getLocation().getY();
+        handleDes.setStepDes("滑动拖拽" + des + "到" + des2);
         handleDes.setDetail("拖动坐标(" + x1 + "," + y1 + ")到(" + x2 + "," + y2 + ")");
         try {
             TouchAction ta = new TouchAction(androidDriver);
@@ -862,6 +868,26 @@ public class AndroidStepHandler {
         try {
             findEle(selector, pathValue).clear();
         } catch (Exception e) {
+            handleDes.setE(e);
+        }
+    }
+
+    public void isExistEle(HandleDes handleDes, String des, String selector, String pathValue, boolean expect) {
+        handleDes.setStepDes("判断控件 " + des + " 是否存在");
+        handleDes.setDetail("期望值：" + (expect ? "存在" : "不存在"));
+        boolean hasEle = false;
+        try {
+            WebElement w = findEle(selector, pathValue);
+            if (w != null) {
+                hasEle = true;
+            }
+        } catch (Exception e) {
+            handleDes.setE(e);
+            return;
+        }
+        try {
+            assertEquals(hasEle, expect);
+        } catch (AssertionError e) {
             handleDes.setE(e);
         }
     }
@@ -1402,13 +1428,22 @@ public class AndroidStepHandler {
         return we;
     }
 
+    public void stepHold(HandleDes handleDes, int time) {
+        handleDes.setStepDes("设置全局步骤间隔");
+        handleDes.setDetail("间隔" + time + " ms");
+        holdTime = time;
+    }
+
+    private int holdTime = 0;
+
     public void runStep(JSONObject stepJSON) throws Throwable {
         JSONObject step = stepJSON.getJSONObject("step");
         JSONArray eleList = step.getJSONArray("elements");
         HandleDes handleDes = new HandleDes();
+        Thread.sleep(holdTime);
         switch (step.getString("stepType")) {
-            case "clickByText":
-                clickByText(handleDes, step.getString("content"));
+            case "stepHold":
+                stepHold(handleDes, Integer.parseInt(step.getString("content")));
                 break;
             case "toWebView":
                 toWebView(handleDes, step.getString("content"));
@@ -1438,6 +1473,10 @@ public class AndroidStepHandler {
                 getTextAndAssert(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleType")
                         , eleList.getJSONObject(0).getString("eleValue"), step.getString("content"));
                 break;
+            case "isExistEle":
+                isExistEle(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleType")
+                        , eleList.getJSONObject(0).getString("eleValue"), step.getBoolean("content"));
+                break;
             case "clear":
                 clear(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleType")
                         , eleList.getJSONObject(0).getString("eleValue"));
@@ -1447,8 +1486,12 @@ public class AndroidStepHandler {
                         , eleList.getJSONObject(0).getString("eleValue"), Integer.parseInt(step.getString("content")));
                 break;
             case "swipe":
-                swipe(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleValue")
+                swipePoint(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleValue")
                         , eleList.getJSONObject(1).getString("eleName"), eleList.getJSONObject(1).getString("eleValue"));
+                break;
+            case "swipe2":
+                swipe(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleType"), eleList.getJSONObject(0).getString("eleValue")
+                        , eleList.getJSONObject(1).getString("eleName"), eleList.getJSONObject(1).getString("eleType"), eleList.getJSONObject(1).getString("eleValue"));
                 break;
             case "tap":
                 tap(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleValue"));
@@ -1617,6 +1660,5 @@ public class AndroidStepHandler {
                 boolean delete = imageFile.delete();
             }
         }
-
     }
 }

@@ -8,18 +8,17 @@ import com.android.ddmlib.IShellOutputReceiver;
 import com.android.ddmlib.InstallException;
 import com.android.ddmlib.InstallReceiver;
 import org.cloud.sonic.agent.automation.AndroidStepHandler;
+import org.cloud.sonic.agent.automation.AppiumServer;
 import org.cloud.sonic.agent.automation.HandleDes;
 import org.cloud.sonic.agent.automation.RemoteDebugDriver;
 import org.cloud.sonic.agent.bridge.android.AndroidDeviceBridgeTool;
 import org.cloud.sonic.agent.bridge.android.AndroidDeviceLocalStatus;
 import org.cloud.sonic.agent.bridge.android.AndroidDeviceThreadPool;
-import org.cloud.sonic.agent.interfaces.DeviceStatus;
-import org.cloud.sonic.agent.interfaces.PlatformType;
-import org.cloud.sonic.agent.maps.*;
+import org.cloud.sonic.agent.common.interfaces.DeviceStatus;
+import org.cloud.sonic.agent.common.maps.*;
 import org.cloud.sonic.agent.netty.NettyThreadPool;
 import org.cloud.sonic.agent.tests.TaskManager;
 import org.cloud.sonic.agent.tests.android.AndroidRunStepThread;
-import org.cloud.sonic.agent.tests.ios.IOSRunStepThread;
 import org.cloud.sonic.agent.tools.*;
 import org.openqa.selenium.OutputType;
 import org.slf4j.Logger;
@@ -50,6 +49,10 @@ public class AndroidWSServer {
     private final Logger logger = LoggerFactory.getLogger(AndroidWSServer.class);
     @Value("${sonic.agent.key}")
     private String key;
+    @Value("${sonic.agent.host}")
+    private String host;
+    @Value("${sonic.agent.port}")
+    private String port;
     @Value("${modules.android.use-adbkit}")
     private boolean isEnableAdbKit;
     private Map<Session, IDevice> udIdMap = new ConcurrentHashMap<>();
@@ -58,6 +61,7 @@ public class AndroidWSServer {
     private Map<Session, Thread> rotationMap = new ConcurrentHashMap<>();
     private Map<Session, Integer> rotationStatusMap = new ConcurrentHashMap<>();
     private Map<Session, String> picMap = new ConcurrentHashMap<>();
+    private Map<Session, String> logMap = new ConcurrentHashMap<>();
     @Autowired
     private RestTemplate restTemplate;
 
@@ -95,13 +99,20 @@ public class AndroidWSServer {
                 .replaceAll("package:", "")
                 .replaceAll("\n", "")
                 .replaceAll("\t", "");
-        if (path.length() > 0) {
-            logger.info("已安装Sonic插件");
+        if (path.length() > 0 && AndroidDeviceBridgeTool.checkSonicApkVersion(iDevice)) {
+            logger.info("已安装Sonic插件，检查版本信息通过");
         } else {
+            logger.info("未安装Sonic插件或版本不是最新，正在安装...");
+            try {
+                iDevice.uninstallPackage("org.cloud.sonic.android");
+            } catch (InstallException e) {
+                logger.info("卸载出错...");
+            }
             try {
                 iDevice.installPackage("plugins/sonic-android-apk.apk",
                         true, new InstallReceiver(), 180L, 180L, TimeUnit.MINUTES
                         , "-r", "-t", "-g");
+                logger.info("Sonic插件安装完毕");
             } catch (InstallException e) {
                 e.printStackTrace();
                 logger.info("Sonic插件安装失败！");
@@ -322,6 +333,11 @@ public class AndroidWSServer {
                 AgentTool.sendText(session, result.toJSONString());
             }
         });
+
+        JSONObject port = new JSONObject();
+        port.put("port", AppiumServer.getPort());
+        port.put("msg", "appiumPort");
+        AgentTool.sendText(session, port.toJSONString());
     }
 
     @OnClose
@@ -349,6 +365,43 @@ public class AndroidWSServer {
         JSONObject msg = JSON.parseObject(message);
         logger.info(session.getId() + " 发送 " + msg);
         switch (msg.getString("type")) {
+            case "proxy": {
+                String processName = String.format("process-%s-proxy", udIdMap.get(session));
+                if (GlobalProcessMap.getMap().get(processName) != null) {
+                    Process ps = GlobalProcessMap.getMap().get(processName);
+                    ps.children().forEach(ProcessHandle::destroy);
+                    ps.destroy();
+                }
+                String system = System.getProperty("os.name").toLowerCase();
+                Process ps = null;
+                int port = PortTool.getPort();
+                int webPort = PortTool.getPort();
+                File pFile = new File("plugins");
+                File sgm = new File(pFile + File.separator + "sonic-go-mitmproxy");
+                String command = String.format(
+                        "%s -cert_path %s -addr :%d -web_addr :%d", sgm.getAbsolutePath(), pFile.getAbsolutePath(), port, webPort);
+                try {
+                    if (system.contains("win")) {
+                        ps = Runtime.getRuntime().exec(new String[]{"cmd", "/c", command});
+                    } else if (system.contains("linux") || system.contains("mac")) {
+                        ps = Runtime.getRuntime().exec(new String[]{"sh", "-c", command});
+                    }
+                    GlobalProcessMap.getMap().put(processName, ps);
+                    JSONObject proxy = new JSONObject();
+                    proxy.put("webPort", webPort);
+                    proxy.put("port", port);
+                    proxy.put("msg", "proxyResult");
+                    AgentTool.sendText(session, proxy.toJSONString());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                break;
+            }
+            case "installCert": {
+                AndroidDeviceBridgeTool.executeCommand(udIdMap.get(session),
+                        String.format("am start -a android.intent.action.VIEW -d http://%s:%s/assets/download", host, port));
+                break;
+            }
             case "forwardView": {
                 JSONObject forwardView = new JSONObject();
                 IDevice iDevice = udIdMap.get(session);
@@ -649,6 +702,13 @@ public class AndroidWSServer {
                     ps.destroy();
                 }
             }
+            String processName = String.format("process-%s-proxy", udIdMap.get(session).getSerialNumber());
+            if (GlobalProcessMap.getMap().get(processName) != null) {
+                Process ps = GlobalProcessMap.getMap().get(processName);
+                ps.children().forEach(ProcessHandle::destroy);
+                ps.destroy();
+            }
+            logMap.remove(session);
         }
         AndroidAPKMap.getMap().remove(udIdMap.get(session).getSerialNumber());
         outputMap.remove(session);

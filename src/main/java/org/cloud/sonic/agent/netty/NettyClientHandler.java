@@ -7,10 +7,10 @@ import com.android.ddmlib.IDevice;
 import org.cloud.sonic.agent.automation.AndroidStepHandler;
 import org.cloud.sonic.agent.automation.IOSStepHandler;
 import org.cloud.sonic.agent.bridge.android.AndroidDeviceBridgeTool;
-import org.cloud.sonic.agent.bridge.ios.TIDeviceTool;
-import org.cloud.sonic.agent.interfaces.PlatformType;
-import org.cloud.sonic.agent.maps.AndroidPasswordMap;
-import org.cloud.sonic.agent.maps.HandlerMap;
+import org.cloud.sonic.agent.bridge.ios.SibTool;
+import org.cloud.sonic.agent.common.interfaces.PlatformType;
+import org.cloud.sonic.agent.common.maps.AndroidPasswordMap;
+import org.cloud.sonic.agent.common.maps.HandlerMap;
 import org.cloud.sonic.agent.tests.AndroidTests;
 import org.cloud.sonic.agent.tests.IOSTests;
 import org.cloud.sonic.agent.tests.SuiteListener;
@@ -24,8 +24,6 @@ import org.cloud.sonic.agent.tests.ios.IOSRunStepThread;
 import org.cloud.sonic.agent.tests.ios.IOSTestTaskBootThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testng.ISuite;
-import org.testng.ISuiteListener;
 import org.testng.TestNG;
 import org.testng.xml.XmlClass;
 import org.testng.xml.XmlSuite;
@@ -37,8 +35,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import static org.cloud.sonic.agent.tests.SuiteListener.runningTestsMap;
 
 public class NettyClientHandler extends ChannelInboundHandlerAdapter {
     private final Logger logger = LoggerFactory.getLogger(NettyClientHandler.class);
@@ -65,6 +61,10 @@ public class NettyClientHandler extends ChannelInboundHandlerAdapter {
         logger.info("Agent:{} 收到服务器 {} 消息: {}", ctx.channel().localAddress(), ctx.channel().remoteAddress(), jsonObject);
         NettyThreadPool.cachedThreadPool.execute(() -> {
             switch (jsonObject.getString("msg")) {
+                case "update": {
+
+                    break;
+                }
                 case "reboot":
                     if (jsonObject.getInteger("platform") == PlatformType.ANDROID) {
                         IDevice rebootDevice = AndroidDeviceBridgeTool.getIDeviceByUdId(jsonObject.getString("udId"));
@@ -73,8 +73,8 @@ public class NettyClientHandler extends ChannelInboundHandlerAdapter {
                         }
                     }
                     if (jsonObject.getInteger("platform") == PlatformType.IOS) {
-                        if (TIDeviceTool.getDeviceList().contains(jsonObject.getString("udId"))) {
-                            TIDeviceTool.reboot(jsonObject.getString("udId"));
+                        if (SibTool.getDeviceList().contains(jsonObject.getString("udId"))) {
+                            SibTool.reboot(jsonObject.getString("udId"));
                         }
                     }
                     break;

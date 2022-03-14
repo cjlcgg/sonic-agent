@@ -20,14 +20,9 @@ public class ScrcpyLocalThread extends Thread {
 
     private final Logger log = LoggerFactory.getLogger(ScrcpyLocalThread.class);
 
-    /**
-     * 占用符逻辑参考：{@link AndroidTestTaskBootThread#ANDROID_TEST_TASK_BOOT_PRE}
-     */
     public final static String ANDROID_START_MINICAP_SERVER_PRE = "android-start-scrcpy-server-task-%s-%s-%s";
 
     private IDevice iDevice;
-
-    private String pic;
 
     private int finalC;
 
@@ -39,11 +34,8 @@ public class ScrcpyLocalThread extends Thread {
 
     private Semaphore isFinish = new Semaphore(0);
 
-
-    public ScrcpyLocalThread(IDevice iDevice, String pic, int finalC, Session session,
-                             AndroidTestTaskBootThread androidTestTaskBootThread) {
+    public ScrcpyLocalThread(IDevice iDevice, int finalC, Session session, AndroidTestTaskBootThread androidTestTaskBootThread) {
         this.iDevice = iDevice;
-        this.pic = pic;
         this.finalC = finalC;
         this.session = session;
         this.udId = iDevice.getSerialNumber();
@@ -55,10 +47,6 @@ public class ScrcpyLocalThread extends Thread {
 
     public IDevice getiDevice() {
         return iDevice;
-    }
-
-    public String getPic() {
-        return pic;
     }
 
     public int getFinalC() {
@@ -83,14 +71,14 @@ public class ScrcpyLocalThread extends Thread {
 
     @Override
     public void run() {
-        File scrcpyServerFile = new File("plugins/scrcpy-server.jar");
+        File scrcpyServerFile = new File("plugins/sonic-android-scrcpy.jar");
         try {
-            iDevice.pushFile(scrcpyServerFile.getAbsolutePath(), "/data/local/tmp/scrcpy-server.jar");
+            iDevice.pushFile(scrcpyServerFile.getAbsolutePath(), "/data/local/tmp/sonic-android-scrcpy.jar");
         } catch (Exception e) {
             e.printStackTrace();
         }
         try {
-            iDevice.executeShellCommand("CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 1.21 log_level=info max_size=0 bit_rate=1800000 max_fps=60 lock_video_orientation=-1 tunnel_forward=true send_frame_meta=false control=true show_touches=false stay_awake=true power_off_on_close=false clipboard_autosync=false",
+            iDevice.executeShellCommand("CLASSPATH=/data/local/tmp/sonic-android-scrcpy.jar app_process / com.genymobile.scrcpy.Server 1.23 log_level=info max_size=0 bit_rate=2097152 max_fps=60 lock_video_orientation=-1 tunnel_forward=true send_frame_meta=false control=true show_touches=false stay_awake=true power_off_on_close=false clipboard_autosync=false",
                     new IShellOutputReceiver() {
                         @Override
                         public void addOutput(byte[] bytes, int i, int i1) {

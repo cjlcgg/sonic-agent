@@ -6,11 +6,11 @@ import org.cloud.sonic.agent.automation.HandleDes;
 import org.cloud.sonic.agent.automation.IOSStepHandler;
 import org.cloud.sonic.agent.bridge.ios.IOSDeviceLocalStatus;
 import org.cloud.sonic.agent.bridge.ios.IOSDeviceThreadPool;
-import org.cloud.sonic.agent.bridge.ios.TIDeviceTool;
-import org.cloud.sonic.agent.interfaces.DeviceStatus;
-import org.cloud.sonic.agent.maps.DevicesLockMap;
-import org.cloud.sonic.agent.maps.HandlerMap;
-import org.cloud.sonic.agent.maps.WebSocketSessionMap;
+import org.cloud.sonic.agent.bridge.ios.SibTool;
+import org.cloud.sonic.agent.common.interfaces.DeviceStatus;
+import org.cloud.sonic.agent.common.maps.DevicesLockMap;
+import org.cloud.sonic.agent.common.maps.HandlerMap;
+import org.cloud.sonic.agent.common.maps.WebSocketSessionMap;
 import org.cloud.sonic.agent.netty.NettyThreadPool;
 import org.cloud.sonic.agent.tests.TaskManager;
 import org.cloud.sonic.agent.tests.ios.IOSRunStepThread;
@@ -65,17 +65,16 @@ public class IOSWSServer {
         jsonDebug.put("udId", udId);
         NettyThreadPool.send(jsonDebug);
         WebSocketSessionMap.addSession(session);
-        if (!TIDeviceTool.getDeviceList().contains(udId)) {
+        if (!SibTool.getDeviceList().contains(udId)) {
             logger.info("设备未连接，请检查！");
             return;
         }
         udIdMap.put(session, udId);
-        int wdaPort = TIDeviceTool.startWda(udId);
-        int imgPort = TIDeviceTool.relayImg(udId);
+        int[] ports = SibTool.startWda(udId);
         JSONObject picFinish = new JSONObject();
         picFinish.put("msg", "picFinish");
-        picFinish.put("wda", wdaPort);
-        picFinish.put("port", imgPort);
+        picFinish.put("wda", ports[0]);
+        picFinish.put("port", ports[1]);
         sendText(session, picFinish.toJSONString());
 
         IOSDeviceThreadPool.cachedThreadPool.execute(() -> {
@@ -83,7 +82,7 @@ public class IOSWSServer {
             iosStepHandler.setTestMode(0, 0, udId, DeviceStatus.DEBUGGING, session.getId());
             JSONObject result = new JSONObject();
             try {
-                iosStepHandler.startIOSDriver(udId, wdaPort);
+                iosStepHandler.startIOSDriver(udId, ports[0]);
                 result.put("status", "success");
                 result.put("width", iosStepHandler.getDriver().manage().window().getSize().width);
                 result.put("height", iosStepHandler.getDriver().manage().window().getSize().height);

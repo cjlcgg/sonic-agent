@@ -3,24 +3,22 @@ package org.cloud.sonic.agent.automation;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import org.cloud.sonic.agent.bridge.ios.TIDeviceTool;
-import org.cloud.sonic.agent.cv.AKAZEFinder;
-import org.cloud.sonic.agent.cv.SIFTFinder;
-import org.cloud.sonic.agent.cv.SimilarityChecker;
-import org.cloud.sonic.agent.cv.TemMatcher;
-import org.cloud.sonic.agent.interfaces.ErrorType;
-import org.cloud.sonic.agent.interfaces.ResultDetailStatus;
-import org.cloud.sonic.agent.interfaces.StepType;
-import org.cloud.sonic.agent.maps.IOSProcessMap;
-import org.cloud.sonic.agent.maps.IOSSizeMap;
+import org.cloud.sonic.agent.bridge.ios.SibTool;
+import org.cloud.sonic.agent.tools.cv.AKAZEFinder;
+import org.cloud.sonic.agent.tools.cv.SIFTFinder;
+import org.cloud.sonic.agent.tools.cv.SimilarityChecker;
+import org.cloud.sonic.agent.tools.cv.TemMatcher;
+import org.cloud.sonic.agent.common.interfaces.ErrorType;
+import org.cloud.sonic.agent.common.interfaces.ResultDetailStatus;
+import org.cloud.sonic.agent.common.interfaces.StepType;
+import org.cloud.sonic.agent.common.maps.IOSProcessMap;
+import org.cloud.sonic.agent.common.maps.IOSInfoMap;
 import org.cloud.sonic.agent.tools.DownImageTool;
 import org.cloud.sonic.agent.tools.LogTool;
-import org.cloud.sonic.agent.tools.SpringTool;
 import org.cloud.sonic.agent.tools.UploadTools;
 import io.appium.java_client.MultiTouchAction;
 import io.appium.java_client.Setting;
 import io.appium.java_client.TouchAction;
-import io.appium.java_client.android.appmanagement.AndroidTerminateApplicationOptions;
 import io.appium.java_client.appmanagement.BaseInstallApplicationOptions;
 import io.appium.java_client.appmanagement.BaseTerminateApplicationOptions;
 import io.appium.java_client.ios.IOSDriver;
@@ -38,14 +36,8 @@ import org.openqa.selenium.Platform;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.remote.DesiredCapabilities;
-import org.springframework.core.env.Environment;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.http.ResponseEntity;
 import org.springframework.util.Base64Utils;
 import org.springframework.util.FileCopyUtils;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -71,7 +63,7 @@ public class IOSStepHandler {
     private String testPackage = "";
     private String udId = "";
     //测试状态
-    private int status = 1;
+    private int status = ResultDetailStatus.PASS;
 
     public void setTestMode(int caseId, int resultId, String udId, String type, String sessionId) {
         log.caseId = caseId;
@@ -92,7 +84,7 @@ public class IOSStepHandler {
         desiredCapabilities.setCapability(MobileCapabilityType.AUTOMATION_NAME, AutomationName.IOS_XCUI_TEST);
         desiredCapabilities.setCapability(MobileCapabilityType.NEW_COMMAND_TIMEOUT, 3600);
         desiredCapabilities.setCapability(MobileCapabilityType.NO_RESET, true);
-        desiredCapabilities.setCapability(MobileCapabilityType.DEVICE_NAME, TIDeviceTool.getName(udId));
+        desiredCapabilities.setCapability(MobileCapabilityType.DEVICE_NAME, SibTool.getName(udId));
         desiredCapabilities.setCapability(MobileCapabilityType.UDID, udId);
         desiredCapabilities.setCapability("wdaConnectionTimeout", 60000);
         desiredCapabilities.setCapability(IOSMobileCapabilityType.WEB_DRIVER_AGENT_URL, "http://127.0.0.1:" + wdaPort);
@@ -107,7 +99,7 @@ public class IOSStepHandler {
             iosDriver.setSetting(Setting.MJPEG_SERVER_FRAMERATE, 50);
             iosDriver.setSetting(Setting.MJPEG_SCALING_FACTOR, 50);
             iosDriver.setSetting(Setting.MJPEG_SERVER_SCREENSHOT_QUALITY, 10);
-            iosDriver.setSetting("snapshotMaxDepth",30);
+            iosDriver.setSetting("snapshotMaxDepth", 30);
             log.sendStepLog(StepType.PASS, "连接设备驱动成功", "");
         } catch (Exception e) {
             log.sendStepLog(StepType.ERROR, "连接设备驱动失败！", "");
@@ -117,20 +109,12 @@ public class IOSStepHandler {
         }
         int width = iosDriver.manage().window().getSize().width;
         int height = iosDriver.manage().window().getSize().height;
-        IOSSizeMap.getMap().put(udId, width + "x" + height);
+        IOSInfoMap.getSizeMap().put(udId, width + "x" + height);
     }
 
     public void closeIOSDriver() {
         try {
             if (iosDriver != null) {
-                //终止测试包
-                if (!testPackage.equals("")) {
-                    try {
-                        iosDriver.terminateApp(testPackage, new AndroidTerminateApplicationOptions().withTimeout(Duration.ofMillis(1000)));
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
                 iosDriver.quit();
                 log.sendStepLog(StepType.PASS, "退出连接设备", "");
                 if (IOSProcessMap.getMap().get(udId) != null) {
@@ -517,12 +501,29 @@ public class IOSStepHandler {
         }
     }
 
-    public void swipe(HandleDes handleDes, String des1, String xy1, String des2, String xy2) {
+    public void swipePoint(HandleDes handleDes, String des1, String xy1, String des2, String xy2) {
         int x1 = Integer.parseInt(xy1.substring(0, xy1.indexOf(",")));
         int y1 = Integer.parseInt(xy1.substring(xy1.indexOf(",") + 1));
         int x2 = Integer.parseInt(xy2.substring(0, xy2.indexOf(",")));
         int y2 = Integer.parseInt(xy2.substring(xy2.indexOf(",") + 1));
         handleDes.setStepDes("滑动拖拽" + des1 + "到" + des2);
+        handleDes.setDetail("拖动坐标(" + x1 + "," + y1 + ")到(" + x2 + "," + y2 + ")");
+        try {
+            TouchAction ta = new TouchAction(iosDriver);
+            ta.press(PointOption.point(x1, y1)).waitAction(WaitOptions.waitOptions(Duration.ofMillis(300))).moveTo(PointOption.point(x2, y2)).release().perform();
+        } catch (Exception e) {
+            handleDes.setE(e);
+        }
+    }
+
+    public void swipe(HandleDes handleDes, String des, String selector, String pathValue, String des2, String selector2, String pathValue2) {
+        WebElement webElement = findEle(selector, pathValue);
+        WebElement webElement2 = findEle(selector2, pathValue2);
+        int x1 = webElement.getLocation().getX();
+        int y1 = webElement.getLocation().getY();
+        int x2 = webElement2.getLocation().getX();
+        int y2 = webElement2.getLocation().getY();
+        handleDes.setStepDes("滑动拖拽" + des + "到" + des2);
         handleDes.setDetail("拖动坐标(" + x1 + "," + y1 + ")到(" + x2 + "," + y2 + ")");
         try {
             TouchAction ta = new TouchAction(iosDriver);
@@ -553,6 +554,26 @@ public class IOSStepHandler {
         try {
             findEle(selector, pathValue).clear();
         } catch (Exception e) {
+            handleDes.setE(e);
+        }
+    }
+
+    public void isExistEle(HandleDes handleDes, String des, String selector, String pathValue, boolean expect) {
+        handleDes.setStepDes("判断控件 " + des + " 是否存在");
+        handleDes.setDetail("期望值：" + (expect ? "存在" : "不存在"));
+        boolean hasEle = false;
+        try {
+            WebElement w = findEle(selector, pathValue);
+            if (w != null) {
+                hasEle = true;
+            }
+        } catch (Exception e) {
+            handleDes.setE(e);
+            return;
+        }
+        try {
+            assertEquals(hasEle, expect);
+        } catch (AssertionError e) {
             handleDes.setE(e);
         }
     }
@@ -791,11 +812,23 @@ public class IOSStepHandler {
         return we;
     }
 
+    public void stepHold(HandleDes handleDes, int time) {
+        handleDes.setStepDes("设置全局步骤间隔");
+        handleDes.setDetail("间隔" + time + " ms");
+        holdTime = time;
+    }
+
+    private int holdTime = 0;
+
     public void runStep(JSONObject stepJSON) throws Throwable {
         JSONObject step = stepJSON.getJSONObject("step");
         JSONArray eleList = step.getJSONArray("elements");
         HandleDes handleDes = new HandleDes();
+        Thread.sleep(holdTime);
         switch (step.getString("stepType")) {
+            case "stepHold":
+                stepHold(handleDes, Integer.parseInt(step.getString("content")));
+                break;
             case "siriCommand":
                 siriCommand(handleDes, step.getString("content"));
                 break;
@@ -821,6 +854,10 @@ public class IOSStepHandler {
                 getTextAndAssert(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleType")
                         , eleList.getJSONObject(0).getString("eleValue"), step.getString("content"));
                 break;
+            case "isExistEle":
+                isExistEle(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleType")
+                        , eleList.getJSONObject(0).getString("eleValue"), step.getBoolean("content"));
+                break;
             case "clear":
                 clear(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleType")
                         , eleList.getJSONObject(0).getString("eleValue"));
@@ -830,8 +867,12 @@ public class IOSStepHandler {
                         , eleList.getJSONObject(0).getString("eleValue"), Integer.parseInt(step.getString("content")));
                 break;
             case "swipe":
-                swipe(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleValue")
+                swipePoint(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleValue")
                         , eleList.getJSONObject(1).getString("eleName"), eleList.getJSONObject(1).getString("eleValue"));
+                break;
+            case "swipe2":
+                swipe(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleType"), eleList.getJSONObject(0).getString("eleValue")
+                        , eleList.getJSONObject(1).getString("eleName"), eleList.getJSONObject(1).getString("eleType"), eleList.getJSONObject(1).getString("eleValue"));
                 break;
             case "tap":
                 tap(handleDes, eleList.getJSONObject(0).getString("eleName"), eleList.getJSONObject(0).getString("eleValue"));
